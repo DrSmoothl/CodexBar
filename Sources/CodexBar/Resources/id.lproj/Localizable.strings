@@ -969,6 +969,12 @@
 "Copied" = "Disalin";
 "Managed by Homebrew" = "Dikelola oleh Homebrew";
 "Copy update command" = "Salin perintah pembaruan";
+"Update to %@" = "Perbarui ke %@";
+"CodexBar %@ is available" = "CodexBar %@ tersedia";
+"CodexBar is up to date" = "CodexBar sudah terbaru";
+"Checking for updates…" = "Memeriksa pembaruan…";
+"Updating with Homebrew…" = "Memperbarui dengan Homebrew…";
+"Homebrew update failed. You can run this command in Terminal instead:" = "Pembaruan Homebrew gagal. Anda dapat menjalankan perintah ini di Terminal:";
 "Copy error" = "Salin error";
 "Copy path" = "Salin path";
 "Extra usage spent" = "Penggunaan ekstra dibelanjakan";

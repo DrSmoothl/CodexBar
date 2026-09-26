@@ -190,13 +190,6 @@ final class DisabledUpdaterController: UpdaterProviding {
         self.manualUpdateCommand = manualUpdateCommand
     }
 
-    static func homebrew() -> DisabledUpdaterController {
-        let command = ManualUpdateCommand.homebrew
-        return DisabledUpdaterController(
-            unavailableReason: L("Managed by Homebrew"),
-            manualUpdateCommand: command)
-    }
-
     func checkForUpdates(_ sender: Any?) {}
     func installUpdate() {}
 }
@@ -206,9 +199,14 @@ final class DisabledUpdaterController: UpdaterProviding {
 final class UpdateStatus {
     static let disabled = UpdateStatus()
     var isUpdateReady: Bool
+    /// A newer version that can be installed on demand, for updaters that do not stage downloads.
+    var availableVersion: String?
+    var isInstalling: Bool
 
-    init(isUpdateReady: Bool = false) {
+    init(isUpdateReady: Bool = false, availableVersion: String? = nil, isInstalling: Bool = false) {
         self.isUpdateReady = isUpdateReady
+        self.availableVersion = availableVersion
+        self.isInstalling = isInstalling
     }
 }
 
@@ -350,7 +348,8 @@ private func makeUpdaterController() -> UpdaterProviding {
     }
 
     if InstallOrigin.isHomebrewCask(appBundleURL: bundleURL) {
-        return DisabledUpdaterController.homebrew()
+        return HomebrewUpdaterController(
+            savedAutoCheck: (UserDefaults.standard.object(forKey: "autoUpdateEnabled") as? Bool) ?? true)
     }
 
     guard isDeveloperIDSigned(bundleURL: bundleURL) else {
