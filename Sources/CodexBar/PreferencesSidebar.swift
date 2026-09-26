@@ -188,7 +188,7 @@ struct SettingsSidebarProviderRow: View {
             }
 
             if self.isEnabled, self.store.statusChecksEnabled {
-                SettingsSidebarStatusDot(indicator: self.store.statusIndicator(for: self.provider))
+                SettingsSidebarStatusDot(indicator: self.store.status(for: self.provider)?.indicator)
             }
         }
         .opacity(self.isEnabled ? 1 : 0.62)
@@ -205,14 +205,14 @@ struct SettingsSidebarProviderRow: View {
             name: self.store.metadata(for: self.provider).displayName,
             isEnabled: self.isEnabled,
             statusChecksEnabled: self.store.statusChecksEnabled,
-            indicator: self.store.statusIndicator(for: self.provider))
+            indicator: self.store.status(for: self.provider)?.indicator)
     }
 
     nonisolated static func accessibilityLabel(
         name: String,
         isEnabled: Bool,
         statusChecksEnabled: Bool,
-        indicator: ProviderStatusIndicator) -> String
+        indicator: ProviderStatusIndicator?) -> String
     {
         guard isEnabled else { return "\(name) — \(L("Disabled"))" }
         guard statusChecksEnabled else { return name }
@@ -244,7 +244,7 @@ private struct SettingsSidebarBrandIcon: View {
 }
 
 struct SettingsSidebarStatusDot: View {
-    let indicator: ProviderStatusIndicator
+    let indicator: ProviderStatusIndicator?
 
     var body: some View {
         Circle()
@@ -254,12 +254,12 @@ struct SettingsSidebarStatusDot: View {
             .accessibilityHidden(true)
     }
 
-    nonisolated static func statusDescription(for indicator: ProviderStatusIndicator) -> String {
-        L("Provider service status: %@", indicator.label)
+    nonisolated static func statusDescription(for indicator: ProviderStatusIndicator?) -> String {
+        L("Provider service status: %@", (indicator ?? .unknown).label)
     }
 
     private var statusColor: Color {
-        switch self.indicator {
+        switch self.indicator ?? .none {
         case .none: .green
         case .minor: .yellow
         case .major: .orange

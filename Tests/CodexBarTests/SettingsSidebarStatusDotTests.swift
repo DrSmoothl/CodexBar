@@ -51,4 +51,30 @@ struct SettingsSidebarStatusDotTests {
                 indicator: .major) == "Codex")
         }
     }
+
+    @Test
+    func `Missing status is unknown rather than operational`() {
+        CodexBarLocalizationOverride.$appLanguage.withValue("en") {
+            #expect(SettingsSidebarStatusDot.statusDescription(for: nil)
+                == "Provider service status: Status unknown")
+            #expect(SettingsSidebarProviderRow.accessibilityLabel(
+                name: "Codex",
+                isEnabled: true,
+                statusChecksEnabled: true,
+                indicator: nil) == "Codex — Provider service status: Status unknown")
+        }
+    }
+
+    @Test
+    func `Fetched healthy status remains operational`() {
+        CodexBarLocalizationOverride.$appLanguage.withValue("en") {
+            #expect(SettingsSidebarStatusDot.statusDescription(for: ProviderStatusIndicator.none)
+                == "Provider service status: Operational")
+            #expect(SettingsSidebarProviderRow.accessibilityLabel(
+                name: "Codex",
+                isEnabled: true,
+                statusChecksEnabled: true,
+                indicator: ProviderStatusIndicator.none) == "Codex — Provider service status: Operational")
+        }
+    }
 }
