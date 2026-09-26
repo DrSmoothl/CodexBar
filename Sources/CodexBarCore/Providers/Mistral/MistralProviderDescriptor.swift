@@ -96,7 +96,12 @@ public enum MistralProviderDescriptor {
             cli: ProviderCLIConfig(
                 name: "mistral",
                 aliases: ["mistral-ai"],
-                versionDetector: nil))
+                versionDetector: nil,
+                browserSupportExemption: { _, _, settings in
+                    // A pasted Cookie header needs no browser import, so it works on Linux too.
+                    settings?.mistral?.cookieSource == .manual &&
+                        CookieHeaderNormalizer.normalize(settings?.mistral?.manualCookieHeader) != nil
+                }))
     }
 }
 
