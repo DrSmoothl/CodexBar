@@ -960,6 +960,12 @@
 "Copied" = "Copié";
 "Managed by Homebrew" = "Géré par Homebrew";
 "Copy update command" = "Copier la commande de mise à jour";
+"Update to %@" = "Mettre à jour vers %@";
+"CodexBar %@ is available" = "CodexBar %@ est disponible";
+"CodexBar is up to date" = "CodexBar est à jour";
+"Checking for updates…" = "Recherche de mises à jour…";
+"Updating with Homebrew…" = "Mise à jour via Homebrew…";
+"Homebrew update failed. You can run this command in Terminal instead:" = "La mise à jour Homebrew a échoué. Vous pouvez exécuter cette commande dans le Terminal :";
 "Copy error" = "Erreur de copie";
 "Copy path" = "Copier le chemin";
 "Extra usage spent" = "Utilisation supplémentaire dépensée";

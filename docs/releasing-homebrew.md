@@ -7,7 +7,7 @@ read_when:
 
 # CodexBar Homebrew Release Playbook
 
-Homebrew is for the UI app via Cask. When installed via Homebrew, CodexBar disables Sparkle and shows a "update via brew" hint in About.
+Homebrew is for the UI app via Cask. When installed via Homebrew, CodexBar disables Sparkle, checks `Casks/codexbar.rb` in the tap for a newer version, and offers a one-click update that runs `brew upgrade --cask steipete/tap/codexbar`. Users are only prompted once the tap cask is bumped.
 
 ## Prereqs
 - Homebrew installed.

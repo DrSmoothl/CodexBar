@@ -2,6 +2,10 @@
 
 ## 0.67.1 — Unreleased
 
+### Added
+
+- Updates: Homebrew cask installs now check the tap for a newer CodexBar and offer a one-click "Update to …" in the menu and About, which runs `brew upgrade` in the background and relaunches; Homebrew stays the update owner, and the copyable command remains as a fallback.
+
 ## 0.67.0 — 2026-09-25
 
 ### Highlights
