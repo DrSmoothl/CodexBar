@@ -15,8 +15,10 @@ struct CodexAppServerDaemonTests {
         #expect(!CodexHomeScope.isAppServer(arguments: []))
     }
 
-    @Test(arguments: ["daemon.pid", "app-server.pid"])
-    func `promotion restarts the live home daemon once after publishing auth`(_ filename: String) async throws {
+    @Test(arguments: ["daemon.pid", "app-server.pid"], ["plain", "symlink", "resolved-symlink"])
+    func `promotion restarts the live home daemon once after publishing auth`(
+        _ filename: String, _ socketPath: String) async throws
+    {
         let container = try CodexAccountPromotionTestContainer(suiteName: "daemon-promotion")
         defer { container.tearDown() }
         let target = try container.createManagedAccount(
@@ -24,13 +26,14 @@ struct CodexAppServerDaemonTests {
         try container.persistAccounts([target])
         _ = try container.writeLiveOAuthAuthFile(email: "live@example.com", accountID: "acct-live")
         try Self.writePID(home: container.liveHomeURL, filename: filename)
+        if socketPath != "plain" { try Self.writeSocketSymlink(home: container.liveHomeURL) }
         var calls: [String] = []
         let daemon = CodexAppServerDaemon(isAppServerProcess: { $0 == 123 }, run: { command, env in
             calls.append(command)
             #expect(env["CODEX_HOME"] == container.liveHomeURL.resolvingSymlinksInPath().path)
             let identity = try container.identityReader.loadAccountIdentity(homePath: container.liveHomeURL.path)
             #expect(identity.email == "managed@example.com")
-            return Self.version(home: container.liveHomeURL)
+            return Self.version(home: container.liveHomeURL, resolveSocket: socketPath == "resolved-symlink")
         })
         let result = try await container.makeService(daemon: daemon).promoteManagedAccount(id: target.id)
         #expect(result.outcome == .promoted)
@@ -90,11 +93,17 @@ struct CodexAppServerDaemonTests {
         #expect(calls == (failure == "version" ? ["version"] : ["version", "restart"]))
     }
 
-    @Test(arguments: ["other-home", "unmanaged", "stopped"])
-    func `only a managed daemon answering for the promoted home can restart`(_ mismatch: String) async throws {
+    @Test(arguments: ["other-home", "unmanaged", "stopped"], [false, true])
+    func `only a managed daemon answering for the promoted home can restart`(
+        _ mismatch: String, _ symlinkedSocket: Bool) async throws
+    {
         let container = try CodexAccountPromotionTestContainer(suiteName: "daemon-home-match")
         defer { container.tearDown() }
         try Self.writePID(home: container.liveHomeURL)
+        if symlinkedSocket {
+            try Self.writeSocketSymlink(home: container.liveHomeURL)
+            try Self.writeSocketSymlink(home: container.managedHomesURL)
+        }
         var calls: [String] = []
         let daemon = CodexAppServerDaemon(isAppServerProcess: { _ in true }, run: { command, env in
             calls.append(command)
@@ -118,8 +127,22 @@ struct CodexAppServerDaemonTests {
             .write(to: directory.appendingPathComponent(filename))
     }
 
-    private static func version(home: URL, backend: String = "pid", status: String = "running") -> String {
-        let socket = home.resolvingSymlinksInPath().appendingPathComponent("app-server-control/app-server-control.sock")
+    private static func writeSocketSymlink(home: URL) throws {
+        let socket = home.appendingPathComponent("app-server-control/app-server-control.sock")
+        let target = home.deletingLastPathComponent().appendingPathComponent("\(home.lastPathComponent).sock")
+        // The CLI probe is injected, but path resolution must follow a real filesystem symlink.
+        try Data().write(to: target)
+        try FileManager.default.createDirectory(
+            at: socket.deletingLastPathComponent(),
+            withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(at: socket, withDestinationURL: target)
+    }
+
+    private static func version(
+        home: URL, backend: String = "pid", status: String = "running", resolveSocket: Bool = false) -> String
+    {
+        var socket = home.resolvingSymlinksInPath().appendingPathComponent("app-server-control/app-server-control.sock")
+        if resolveSocket { socket = socket.resolvingSymlinksInPath().standardizedFileURL }
         return "{\"status\":\"\(status)\",\"backend\":\"\(backend)\",\"socketPath\":\"\(socket.path)\"}"
     }
 }

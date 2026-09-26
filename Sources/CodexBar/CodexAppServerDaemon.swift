@@ -31,9 +31,12 @@ struct CodexAppServerDaemon {
             let output = try await self.run("version", env)
             let version = try JSONDecoder().decode(Version.self, from: Data(output.utf8))
             // The CLI validates its PID/start-time record and probes this home's control socket.
+            // Codex can publish the control socket as a symlink to its protected socket directory.
+            let expectedSocket = home.appendingPathComponent("app-server-control/app-server-control.sock")
+                .resolvingSymlinksInPath().standardizedFileURL
             guard version.status == "running", version.backend == "pid",
                   URL(fileURLWithPath: version.socketPath).resolvingSymlinksInPath().standardizedFileURL ==
-                  home.appendingPathComponent("app-server-control/app-server-control.sock")
+                  expectedSocket
             else { return nil }
             phase = "restart"
             _ = try await self.run("restart", env)
