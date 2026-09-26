@@ -85,52 +85,62 @@ defineProvider({
     async function webQuota(): Promise<{ quota?: WebQuota; teams?: WebTeam[]; note?: string } | undefined> {
       if (ctx.browser.availability("dev.meta.ai") === "off") return undefined;
       try {
-        const headers = { Cookie: await ctx.browser.cookieHeader("dev.meta.ai"), "User-Agent": "CodexBar" };
-        const get = async (path: string): Promise<Record<string, unknown> | undefined> => {
-          const response = await ctx.http.get(`https://dev.meta.ai${path}`, { headers, timeoutSeconds: 8 });
-          if (response.status === 401 || response.status === 403) {
-            ctx.browser.rejectCookie("dev.meta.ai");
-            return undefined;
+        let requestsLeft = 5;
+        for await (const session of ctx.browser.sessions("dev.meta.ai")) {
+          if (requestsLeft <= 0) break;
+          let rejected = false;
+          const headers = { Cookie: session.header, "User-Agent": "CodexBar" };
+          const get = async (path: string): Promise<Record<string, unknown> | undefined> => {
+            if (requestsLeft-- <= 0) throw new Error("Muse browser request budget exhausted");
+            const response = await ctx.http.get(`https://dev.meta.ai${path}`, { headers, timeoutSeconds: 8 });
+            if (response.status === 401 || response.status === 403) {
+              rejected = true;
+              ctx.browser.rejectCookie("dev.meta.ai", session);
+              return undefined;
+            }
+            if (response.status !== 200) return undefined;
+            const value: unknown = JSON.parse(response.bodyText);
+            return value && typeof value === "object" && !Array.isArray(value)
+              ? (value as Record<string, unknown>)
+              : undefined;
+          };
+          // The browser session must belong to the same Meta account as the CLI login.
+          const loginEmail = text(root.user_email, "user_email")?.toLowerCase();
+          const me = await get("/api/auth/me");
+          const webEmail = typeof me?.email === "string" ? me.email.trim().toLowerCase() : undefined;
+          if (!loginEmail || !webEmail || loginEmail !== webEmail) continue;
+          const listed = (await get("/api/portal/teams"))?.teams;
+          if (rejected) continue;
+          if (!Array.isArray(listed)) return undefined;
+          const teams: WebTeam[] = [];
+          for (const entry of listed) {
+            const item = entry && typeof entry === "object" ? (entry as Record<string, unknown>) : {};
+            const id =
+              typeof item.team_id === "string"
+                ? item.team_id
+                : Number.isSafeInteger(item.team_id)
+                  ? String(item.team_id)
+                  : "";
+            if (!/^[0-9]+$/.test(id)) continue;
+            const name = typeof item.team_name === "string" && item.team_name.trim() ? item.team_name.trim() : id;
+            teams.push({ id, name });
           }
-          if (response.status !== 200) return undefined;
-          const value: unknown = JSON.parse(response.bodyText);
-          return value && typeof value === "object" && !Array.isArray(value)
-            ? (value as Record<string, unknown>)
-            : undefined;
-        };
-        // The browser session must belong to the same Meta account as the CLI login.
-        const loginEmail = text(root.user_email, "user_email")?.toLowerCase();
-        const me = await get("/api/auth/me");
-        const webEmail = typeof me?.email === "string" ? me.email.trim().toLowerCase() : undefined;
-        if (!loginEmail || !webEmail || loginEmail !== webEmail) return undefined;
-        const listed = (await get("/api/portal/teams"))?.teams;
-        if (!Array.isArray(listed)) return undefined;
-        const teams: WebTeam[] = [];
-        for (const entry of listed) {
-          const item = entry && typeof entry === "object" ? (entry as Record<string, unknown>) : {};
-          const id =
-            typeof item.team_id === "string"
-              ? item.team_id
-              : Number.isSafeInteger(item.team_id)
-                ? String(item.team_id)
-                : "";
-          if (!/^[0-9]+$/.test(id)) continue;
-          const name = typeof item.team_name === "string" && item.team_name.trim() ? item.team_name.trim() : id;
-          teams.push({ id, name });
+          const selected = ctx.settings.get("MUSE_WEB_TEAM_ID")?.trim() ?? "";
+          const team = teams.find((candidate) => candidate.id === selected);
+          if (!selected) return { teams, note: "Choose a browser team in Muse Code settings" };
+          if (!team) return { teams, note: "The selected browser team is not visible to this session" };
+          const quota = (await get(`/api/portal/teams/${team.id}/subscription-quota`))?.subscription_quota;
+          if (rejected) continue;
+          if (!quota || typeof quota !== "object")
+            return { teams, note: "No subscription quota for the selected team" };
+          const record = quota as Record<string, unknown>;
+          // The team's quota must be for the same plan the CLI login reports.
+          if (!plan || typeof record.tier !== "string" || record.tier.trim() !== plan) {
+            return { teams, note: "The selected team's plan differs from the Muse login" };
+          }
+          const parsed = parseWebQuota(record);
+          return parsed ? { teams, quota: { team, ...parsed } } : { teams };
         }
-        const selected = ctx.settings.get("MUSE_WEB_TEAM_ID")?.trim() ?? "";
-        const team = teams.find((candidate) => candidate.id === selected);
-        if (!selected) return { teams, note: "Choose a browser team ID in Muse Code settings" };
-        if (!team) return { teams, note: "The selected browser team is not visible to this session" };
-        const quota = (await get(`/api/portal/teams/${team.id}/subscription-quota`))?.subscription_quota;
-        if (!quota || typeof quota !== "object") return { note: "No subscription quota for the selected team" };
-        const record = quota as Record<string, unknown>;
-        // The team's quota must be for the same plan the CLI login reports.
-        if (!plan || typeof record.tier !== "string" || record.tier.trim() !== plan) {
-          return { note: "The selected team's plan differs from the Muse login" };
-        }
-        const parsed = parseWebQuota(record);
-        return parsed ? { quota: { team, ...parsed } } : undefined;
       } catch (error) {
         void error;
       }
@@ -157,10 +167,12 @@ defineProvider({
       const seconds = amount(quota.window_duration_secs);
       // A weekly quota without a future reset is stale; show nothing rather than an old reading.
       if (weeklyPercent === null || !weeklyReset || weeklyReset.getTime() <= now) return null;
-      if (seconds === null || seconds < 60) return null;
+      if (seconds === null || !Number.isSafeInteger(seconds) || seconds < 60) return null;
       const windowReset = resetAt(quota.window_resets_at);
       let primaryPercent = percent(quota.window_weighted_used, quota.window_weighted_limit);
       if (primaryPercent === null) return null;
+      const noWindowReset = quota.window_resets_at === undefined || quota.window_resets_at === null;
+      if ((!noWindowReset && !windowReset) || (noWindowReset && primaryPercent !== 0)) return null;
       // An idle 5-hour window has no reset time; one whose reset has passed carries no usage into the next window.
       const windowActive = windowReset !== undefined && windowReset.getTime() > now;
       if (!windowActive) primaryPercent = 0;
@@ -179,12 +191,10 @@ defineProvider({
       const web = await webQuota();
       if (!web?.quota) rows.push({ label: "Quota", value: "Not included in this login response" });
       if (!web) return snapshot;
-      if (!web.quota) {
-        const teamRows: CodexBarDetailRow[] = (web.teams ?? []).map((team) => ({ label: team.name, value: team.id }));
-        if (web.note) teamRows.unshift({ label: "Status", value: web.note });
-        snapshot.details?.push({ title: "Browser teams", rows: teamRows });
-        return snapshot;
-      }
+      const teamRows: CodexBarDetailRow[] = (web.teams ?? []).map((team) => ({ label: team.name, value: team.id }));
+      if (web.note) teamRows.unshift({ label: "Status", value: web.note });
+      snapshot.details?.push({ title: "Browser teams", rows: teamRows });
+      if (!web.quota) return snapshot;
       const { team, primary, secondary } = web.quota;
       const webRows: CodexBarDetailRow[] = [
         { label: "Team", value: team.name },

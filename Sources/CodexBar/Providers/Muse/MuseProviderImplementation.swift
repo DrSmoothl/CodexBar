@@ -33,7 +33,17 @@ struct MuseProviderImplementation: ProviderImplementation {
     /// The dev.meta.ai session only fills quotas that the Muse login response leaves out.
     @MainActor
     func settingsPickers(context: ProviderSettingsContext) -> [ProviderSettingsPickerDescriptor] {
-        [
+        let rows = context.store.snapshot(for: .muse)?.details.first { $0.title == "Browser teams" }?.rows ?? []
+        var options = [ProviderSettingsPickerOption(id: "", title: "Choose a team…")]
+        for row in rows where !row.value.isEmpty && row.value.allSatisfy(\.isNumber) {
+            guard !options.contains(where: { $0.id == row.value }) else { continue }
+            options.append(.init(id: row.value, title: "\(row.label) (\(row.value))"))
+        }
+        let selected = context.settings.museWebTeamID
+        if !selected.isEmpty, !options.contains(where: { $0.id == selected }) {
+            options.append(.init(id: selected, title: "\(selected) (unavailable)"))
+        }
+        return [
             ProviderCookieSourceUI.picker(
                 id: "muse-cookie-source",
                 context: context,
@@ -45,6 +55,15 @@ struct MuseProviderImplementation: ProviderImplementation {
                         manual: L("Paste a Cookie header or cURL capture from %@.", "dev.meta.ai"),
                         off: L("%@ cookies are disabled.", "Muse Code"))
                 }),
+            ProviderSettingsPickerDescriptor(
+                id: "muse-web-team-id",
+                title: "Browser team",
+                subtitle: "Refresh Muse Code to load teams when the login omits quotas. "
+                    + "Choose the web team's quota to display, then refresh.",
+                binding: context.binding(\.museWebTeamID),
+                options: options,
+                isVisible: { context.settings.museCookieSource != .off },
+                onChange: nil),
         ]
     }
 
@@ -65,16 +84,6 @@ struct MuseProviderImplementation: ProviderImplementation {
                         url: URL(string: "https://dev.meta.ai/usage")),
                 ],
                 isVisible: { context.settings.museCookieSource == .manual }),
-            ProviderSettingsFieldDescriptor(
-                id: "muse-web-team-id",
-                title: "Browser team ID",
-                subtitle: "The dev.meta.ai team whose quota fills in when the login response omits it. "
-                    + "The Muse menu lists the teams your browser session can see.",
-                kind: .plain,
-                placeholder: "Team ID",
-                binding: context.binding(\.museWebTeamID),
-                actions: [],
-                isVisible: { context.settings.museCookieSource != .off }),
         ]
     }
 }

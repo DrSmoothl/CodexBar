@@ -100,7 +100,7 @@ struct MuseOAuthFetchStrategy: ProviderFetchStrategy {
 
     func fetch(_ context: ProviderFetchContext) async throws -> ProviderFetchResult {
         let token = try MuseCredentials.accessToken(environment: context.env)
-        // The key request (15 s) and the bounded dev.meta.ai fallback (4 × 8 s) fit one 60 s deadline.
+        // The key request (15 s) and the bounded dev.meta.ai fallback (5 × 8 s) fit one 60 s deadline.
         let runtime = try ProviderPluginRuntime(bundledPlugin: "muse", timeout: 60)
         let cookies = ProviderPluginCookieBroker(
             provider: .muse, domains: runtime.manifest.cookieDomains, context: context)

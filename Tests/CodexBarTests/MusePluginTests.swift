@@ -234,6 +234,26 @@ struct MusePluginTests {
         #expect(result.usage.secondary == nil)
     }
 
+    @Test(arguments: ["\"invalid\"", "1e30", "-1", "true", "null"], BundledPluginTestSupport.engines)
+    func `invalid five hour resets never invent an idle window`(
+        reset: String,
+        engine: ProviderPluginEngineKind) async throws
+    {
+        let quota = Self.quota(windowUsed: "4000000000", windowResetsAt: Self.now + 3600)
+            .replacingOccurrences(of: "\"window_resets_at\":\(Self.now + 3600)", with: "\"window_resets_at\":\(reset)")
+        let result = try await Self.fetchWithWeb(engine: engine, web: Self.web(quota: quota))
+        #expect(result.usage.primary == nil)
+        #expect(result.usage.secondary == nil)
+        #expect(result.usage.dataConfidence == .unknown)
+    }
+
+    @Test(arguments: BundledPluginTestSupport.engines)
+    func `selected quota retains the team list for settings`(engine: ProviderPluginEngineKind) async throws {
+        let result = try await Self.fetchWithWeb(engine: engine, web: Self.web(quota: Self.quota()))
+        let teams = try #require(result.usage.details.first { $0.title == "Browser teams" })
+        #expect(teams.rows.contains { $0.label == "My Team" && $0.value == Self.teamID })
+    }
+
     @Test(arguments: BundledPluginTestSupport.engines)
     func `a session without teams reads no quota`(engine: ProviderPluginEngineKind) async throws {
         let requests = RequestLog()
@@ -338,6 +358,7 @@ struct MusePluginTests {
                 with: #""window_weighted_limit":"0""#),
             200),
         ("<html>", 200),
+        (Self.quota().replacingOccurrences(of: "18000", with: "1e30"), 200),
     ], BundledPluginTestSupport.engines)
     func `unusable web quotas keep the login response result`(
         quota: (body: String, status: Int),
@@ -389,6 +410,69 @@ struct MusePluginTests {
         #expect(!requests.all.contains { $0.url?.host == "dev.meta.ai" })
     }
 
+    @Test(arguments: [200, 401, 403], BundledPluginTestSupport.engines)
+    func `wrong account and rejected sessions advance to the matching account`(
+        firstStatus: Int,
+        engine: ProviderPluginEngineKind) async throws
+    {
+        let next = LockIsolated(0)
+        let rejected = LockIsolated<[String]>([])
+        let runtime = try BundledPluginTestSupport.runtime(
+            "muse", engine: engine, transport: ProviderHTTPTransportHandler { request in
+                guard request.url?.host == "dev.meta.ai" else {
+                    return try Self.response(request, body: Self.activeWithoutWindows)
+                }
+                if request.value(forHTTPHeaderField: "Cookie") == "session=first" {
+                    #expect(request.url?.path == "/api/auth/me")
+                    return try Self.response(request, body: #"{"email":"other@example.com"}"#, status: firstStatus)
+                }
+                let (body, code) = Self.web(quota: Self.quota())(request.url?.path ?? "")
+                return try Self.response(request, body: body, status: code)
+            })
+        let result = try await runtime.fetchResult(
+            settings: ["MUSE_WEB_TEAM_ID": Self.teamID],
+            secrets: ["MUSE_DEVICE_TOKEN": "dca:fixture-token"],
+            now: Date(timeIntervalSince1970: TimeInterval(Self.now)),
+            cookieSource: .auto,
+            cookieSessionResolver: { domain, _ in
+                #expect(domain == "dev.meta.ai")
+                let index = next.value
+                next.setValue(index + 1)
+                guard index < 2 else { return nil }
+                let name = index == 0 ? "first" : "matching"
+                return ProviderPluginCookieSession(
+                    header: "session=\(name)", source: "fixture", origin: "https://dev.meta.ai", id: name)
+            },
+            cookieSessionInvalidator: { _, id in rejected.setValue(rejected.value + [id]) },
+            cookieResolver: { _, _ in "session=first" })
+        #expect(result.sourceLabel == "oauth+web")
+        #expect(result.usage.secondary != nil)
+        #expect(rejected.value == (firstStatus == 200 ? [] : ["first"]))
+    }
+
+    @Test(arguments: BundledPluginTestSupport.engines)
+    func `browser session retries stay within the request budget`(engine: ProviderPluginEngineKind) async throws {
+        let requests = RequestLog()
+        let runtime = try BundledPluginTestSupport.runtime(
+            "muse", engine: engine, transport: ProviderHTTPTransportHandler { request in
+                requests.append(request)
+                return try Self.response(
+                    request,
+                    body: request.url?.host == "dev.meta.ai"
+                        ? #"{"email":"other@example.com"}"# : Self.activeWithoutWindows)
+            })
+        let result = try await runtime.fetchResult(
+            settings: ["MUSE_WEB_TEAM_ID": Self.teamID],
+            secrets: ["MUSE_DEVICE_TOKEN": "dca:fixture-token"],
+            cookieSource: .auto,
+            cookieSessionResolver: { _, _ in
+                ProviderPluginCookieSession(header: "session=fixture", source: "fixture", origin: "https://dev.meta.ai")
+            })
+        #expect(requests.all.filter { $0.url?.host == "dev.meta.ai" }.count == 5)
+        #expect(result.usage.secondary == nil)
+        #expect(result.usage.dataConfidence == .unknown)
+    }
+
     @Test(arguments: [
         (ProviderConfig?.none, String?.none),
         (ProviderConfig(id: .muse, cookieSource: .auto), nil),
@@ -420,7 +504,7 @@ struct MusePluginTests {
         #expect(settings[MuseProviderSettingsKey.self]?.cookieSource == expected)
     }
 
-    private final class RequestLog: @unchecked Sendable {
+    final class RequestLog: @unchecked Sendable {
         private let lock = NSLock()
         private var requests: [URLRequest] = []
         private var rejectedDomains: [String] = []
@@ -441,7 +525,7 @@ struct MusePluginTests {
         }
     }
 
-    private static func fetchWithWeb(
+    static func fetchWithWeb(
         engine: ProviderPluginEngineKind,
         account: String = Self.activeWithoutWindows,
         cookieSource: ProviderCookieSource = .auto,
