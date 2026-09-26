@@ -2,6 +2,10 @@
 
 ## 0.67.1 — Unreleased
 
+### Changed
+
+- Settings: simplify menu bar layout controls while keeping token-removal instructions in the section footer (#3999). Thanks @elijahfriedman!
+
 ### Fixed
 
 - Settings: clarify that sidebar dots report provider service health and use gray until status is known. Fixes #4009. Thanks @harjothkhara and @jayn2u!
