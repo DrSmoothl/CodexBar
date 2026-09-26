@@ -14,7 +14,7 @@ struct SettingsSidebarView: View {
         VStack(spacing: 0) {
             HStack(spacing: 6) {
                 SettingsSidebarSearchField(searchText: self.$searchText)
-                SettingsSidebarSortToggle(isOn: self.sortAlphabeticallyBinding)
+                SettingsSidebarSortToggle(isOn: self.$settings.providersSortedAlphabetically)
             }
             .padding(.horizontal, 8)
             .padding(.top, 16)
@@ -88,12 +88,6 @@ struct SettingsSidebarView: View {
                     self.selection = newValue
                 }
             })
-    }
-
-    private var sortAlphabeticallyBinding: Binding<Bool> {
-        Binding(
-            get: { self.settings.providersSortedAlphabetically },
-            set: { self.settings.providersSortedAlphabetically = $0 })
     }
 
     private var orderedProviders: [UsageProvider] {
@@ -175,7 +169,20 @@ struct SettingsSidebarProviderRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            SettingsSidebarBrandIcon(provider: self.provider, isEnabled: self.isEnabled)
+            Group {
+                if let brand = ProviderBrandIcon.image(for: self.provider) {
+                    Image(nsImage: brand)
+                        .resizable()
+                        .scaledToFit()
+                } else {
+                    Image(systemName: "circle.dotted")
+                        .resizable()
+                        .scaledToFit()
+                }
+            }
+            .frame(width: 16, height: 16)
+            .foregroundStyle(self.isEnabled ? .primary : .secondary)
+            .accessibilityHidden(true)
 
             Text(self.store.metadata(for: self.provider).displayName)
                 .foregroundStyle(self.isEnabled ? .primary : .secondary)
@@ -188,7 +195,11 @@ struct SettingsSidebarProviderRow: View {
             }
 
             if self.isEnabled, self.store.statusChecksEnabled {
-                SettingsSidebarStatusDot(indicator: self.store.status(for: self.provider)?.indicator)
+                Circle()
+                    .fill(Self.statusColor(for: self.store.status(for: self.provider)?.indicator))
+                    .frame(width: 6, height: 6)
+                    .help(Self.statusDescription(for: self.store.status(for: self.provider)?.indicator))
+                    .accessibilityHidden(true)
             }
         }
         .opacity(self.isEnabled ? 1 : 0.62)
@@ -216,56 +227,20 @@ struct SettingsSidebarProviderRow: View {
     {
         guard isEnabled else { return "\(name) — \(L("Disabled"))" }
         guard statusChecksEnabled else { return name }
-        return "\(name) — \(SettingsSidebarStatusDot.statusDescription(for: indicator))"
-    }
-}
-
-@MainActor
-private struct SettingsSidebarBrandIcon: View {
-    let provider: UsageProvider
-    let isEnabled: Bool
-
-    var body: some View {
-        Group {
-            if let brand = ProviderBrandIcon.image(for: self.provider) {
-                Image(nsImage: brand)
-                    .resizable()
-                    .scaledToFit()
-            } else {
-                Image(systemName: "circle.dotted")
-                    .resizable()
-                    .scaledToFit()
-            }
-        }
-        .frame(width: 16, height: 16)
-        .foregroundStyle(self.isEnabled ? .primary : .secondary)
-        .accessibilityHidden(true)
-    }
-}
-
-struct SettingsSidebarStatusDot: View {
-    let indicator: ProviderStatusIndicator?
-
-    var body: some View {
-        Circle()
-            .fill(self.statusColor)
-            .frame(width: 6, height: 6)
-            .help(Self.statusDescription(for: self.indicator))
-            .accessibilityHidden(true)
+        return "\(name) — \(self.statusDescription(for: indicator))"
     }
 
     nonisolated static func statusDescription(for indicator: ProviderStatusIndicator?) -> String {
         L("Provider service status: %@", (indicator ?? .unknown).label)
     }
 
-    private var statusColor: Color {
-        switch self.indicator ?? .none {
+    nonisolated static func statusColor(for indicator: ProviderStatusIndicator?) -> Color {
+        switch indicator ?? .unknown {
         case .none: .green
         case .minor: .yellow
         case .major: .orange
         case .critical: .red
-        case .maintenance: .gray
-        case .unknown: .gray
+        case .maintenance, .unknown: .gray
         }
     }
 }

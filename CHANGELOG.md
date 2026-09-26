@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.67.1 — Unreleased
+
+### Fixed
+
+- Settings: clarify that sidebar dots report provider service health and use gray until status is known. Fixes #4009. Thanks @harjothkhara and @jayn2u!
+
 ## 0.67.0 — 2026-09-25
 
 ### Highlights
