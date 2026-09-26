@@ -2,6 +2,10 @@
 
 ## 0.67.1 — Unreleased
 
+### Changed
+
+- Settings: simplify menu bar layout controls while keeping token-removal instructions in the section footer (#3999). Thanks @elijahfriedman!
+
 ### Fixed
 
 - Codex: open usage analytics from Usage Dashboard instead of the retired settings route. Fixes #4004. Thanks @RowboTony!
