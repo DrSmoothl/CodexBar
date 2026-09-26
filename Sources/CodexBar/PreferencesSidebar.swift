@@ -251,7 +251,7 @@ struct SettingsSidebarStatusDot: View {
             .fill(self.statusColor)
             .frame(width: 6, height: 6)
             .help(Self.statusDescription(for: self.indicator))
-            .accessibilityLabel(Self.statusDescription(for: self.indicator))
+            .accessibilityHidden(true)
     }
 
     nonisolated static func statusDescription(for indicator: ProviderStatusIndicator) -> String {
