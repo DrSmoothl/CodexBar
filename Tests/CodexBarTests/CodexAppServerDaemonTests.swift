@@ -120,6 +120,50 @@ struct CodexAppServerDaemonTests {
         #expect(calls == ["version"])
     }
 
+    @Test(arguments: [false, true])
+    func `symlinked home and outside home socket retain the destination scope`(_ resolveSocket: Bool) async throws {
+        let container = try CodexAccountPromotionTestContainer(suiteName: "daemon-home-symlink")
+        defer { container.tearDown() }
+        let alias = container.rootURL.appendingPathComponent("home-alias", isDirectory: true)
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: container.liveHomeURL)
+        try Self.writePID(home: alias)
+        try Self.writeSocketSymlink(home: container.liveHomeURL)
+        var calls: [String] = []
+        let daemon = CodexAppServerDaemon(isAppServerProcess: { $0 == 123 }, run: { command, env in
+            calls.append(command)
+            #expect(env["CODEX_HOME"] == container.liveHomeURL.resolvingSymlinksInPath().path)
+            #expect(env["HOME"] == "/synthetic-user")
+            return Self.version(home: alias, resolveSocket: resolveSocket)
+        })
+        let note = await daemon.restartIfRunning(
+            homeURL: alias, environment: ["HOME": "/synthetic-user", "CODEX_HOME": "/wrong-home"])
+        #expect(note == nil)
+        #expect(calls == ["version", "restart"])
+    }
+
+    @Test(arguments: [false, true])
+    func `dangling socket link cannot override a failed CLI probe`(_ probeThrows: Bool) async throws {
+        let container = try CodexAccountPromotionTestContainer(suiteName: "daemon-dangling-socket")
+        defer { container.tearDown() }
+        try Self.writePID(home: container.liveHomeURL)
+        try Self.writeSocketSymlink(home: container.liveHomeURL)
+        let socket = container.liveHomeURL.appendingPathComponent("app-server-control/app-server-control.sock")
+        try FileManager.default.removeItem(at: socket.resolvingSymlinksInPath())
+        #expect(!FileManager.default.fileExists(atPath: socket.path))
+        #expect(try FileManager.default.destinationOfSymbolicLink(atPath: socket.path).hasSuffix("liveHome.sock"))
+        var calls: [String] = []
+        let daemon = CodexAppServerDaemon(isAppServerProcess: { _ in true }, run: { command, _ in
+            calls.append(command)
+            if probeThrows {
+                throw SubprocessRunnerError.nonZeroExit(code: 1, stderr: "synthetic socket unavailable")
+            }
+            return Self.version(home: container.liveHomeURL, status: "notRunning")
+        })
+        let note = await daemon.restartIfRunning(homeURL: container.liveHomeURL, environment: [:])
+        #expect((note != nil) == probeThrows)
+        #expect(calls == ["version"])
+    }
+
     private static func writePID(home: URL, filename: String = "daemon.pid") throws {
         let directory = home.appendingPathComponent("app-server-daemon")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

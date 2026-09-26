@@ -16,14 +16,13 @@ struct CodexAppServerDaemon {
     func restartIfRunning(homeURL: URL, environment: [String: String]) async -> String? {
         let home = homeURL.resolvingSymlinksInPath().standardizedFileURL
         // Codex uses separate PID records for legacy and daemon-owned installations.
-        let running = ["daemon.pid", "app-server.pid"].contains { name in
+        guard ["daemon.pid", "app-server.pid"].contains(where: { name in
             let url = home.appendingPathComponent("app-server-daemon/\(name)")
             guard let data = try? Data(contentsOf: url),
                   let record = try? JSONDecoder().decode(PIDRecord.self, from: data)
             else { return false }
             return self.isAppServerProcess(record.pid)
-        }
-        guard running else { return nil }
+        }) else { return nil }
         let env = CodexHomeScope.scopedEnvironment(base: environment, codexHome: home.path)
         let log = CodexBarLog.logger("codex-account-promotion")
         var phase = "detect"
@@ -31,12 +30,10 @@ struct CodexAppServerDaemon {
             let output = try await self.run("version", env)
             let version = try JSONDecoder().decode(Version.self, from: Data(output.utf8))
             // The CLI validates its PID/start-time record and probes this home's control socket.
-            // Codex can publish the control socket as a symlink to its protected socket directory.
-            let expectedSocket = home.appendingPathComponent("app-server-control/app-server-control.sock")
-                .resolvingSymlinksInPath().standardizedFileURL
             guard version.status == "running", version.backend == "pid",
                   URL(fileURLWithPath: version.socketPath).resolvingSymlinksInPath().standardizedFileURL ==
-                  expectedSocket
+                  home.appendingPathComponent("app-server-control/app-server-control.sock")
+                  .resolvingSymlinksInPath().standardizedFileURL
             else { return nil }
             phase = "restart"
             _ = try await self.run("restart", env)
