@@ -129,7 +129,9 @@ public struct CostUsageSessionBreakdown: Sendable, Equatable, Identifiable {
     public let projectPath: String?
     public let projectName: String?
     /// Thread name from Codex metadata, when one exists.
-    public let title: String?
+    public private(set) var title: String?
+    /// Original rollout directory; relative SQLite homes must not use the canonical project path.
+    var workingDirectory: String?
 
     public var id: String {
         self.sessionID
@@ -166,20 +168,9 @@ public struct CostUsageSessionBreakdown: Sendable, Equatable, Identifiable {
     }
 
     public func withTitle(_ title: String?) -> CostUsageSessionBreakdown {
-        CostUsageSessionBreakdown(
-            sessionID: self.sessionID,
-            lastActivity: self.lastActivity,
-            inputTokens: self.inputTokens,
-            cachedInputTokens: self.cachedInputTokens,
-            outputTokens: self.outputTokens,
-            reasoningTokens: self.reasoningTokens,
-            totalTokens: self.totalTokens,
-            requestCount: self.requestCount,
-            costUSD: self.costUSD,
-            modelBreakdowns: self.modelBreakdowns,
-            projectPath: self.projectPath,
-            projectName: self.projectName,
-            title: title)
+        var copy = self
+        copy.title = title
+        return copy
     }
 }
 

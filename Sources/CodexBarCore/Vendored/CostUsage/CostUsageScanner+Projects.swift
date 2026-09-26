@@ -70,7 +70,7 @@ extension CostUsageScanner {
             let resolvedProjectPath = file.usage.canonicalProjectPath
                 ?? projectPathResolver.canonicalProjectPath(for: file.usage.projectPath)
             let projectPath = resolvedProjectPath?.isEmpty == false ? resolvedProjectPath : nil
-            return CostUsageSessionBreakdown(
+            var session = CostUsageSessionBreakdown(
                 sessionID: sessionID,
                 lastActivity: Date(timeIntervalSince1970: TimeInterval(file.usage.mtimeUnixMs) / 1000),
                 inputTokens: summary?.totalInputTokens,
@@ -83,6 +83,8 @@ extension CostUsageScanner {
                 projectPath: projectPath,
                 projectName: projectPath.map { Self.codexProjectName(path: $0) },
                 title: file.usage.codexSession?.title)
+            session.workingDirectory = file.usage.projectPath
+            return session
         }
         .sorted { lhs, rhs in
             if lhs.lastActivity != rhs.lastActivity {

@@ -1,3 +1,5 @@
+import Foundation
+
 /// Display-only identity. Keep original names and paths for grouping, row IDs, and stored history.
 struct CostHistoryIdentity: Equatable {
     let name: String
@@ -30,9 +32,9 @@ extension SpendDashboardModel.SessionRow {
             hidePersonalInfo: hidePersonalInfo)
     }
 
-    func displaySubtitle(hidePersonalInfo: Bool) -> String {
+    func displaySubtitle(hidePersonalInfo: Bool, calendar: Calendar) -> String {
         let projectName = hidePersonalInfo ? nil : self.projectName
-        let date = SpendActivityDateFormatting.mediumDateString(self.lastActivity)
+        let date = SpendActivityDateFormatting.mediumDateString(self.lastActivity, calendar: calendar)
         return [projectName, self.modelName, date].compactMap(\.self).joined(separator: " · ")
     }
 }

@@ -372,6 +372,22 @@ the local result and returns a nonzero exit code. See [CLI host reporting](cli.m
   Stale pending path associations are reconciled in the existing cache; surviving forks with missing parents still
   retain their unresolved usage instead of being counted as complete.
 
+### Usage & Spend session rows
+
+Codex session rows show the local thread title when available, with the project, model, and last-activity date
+beneath it. Untitled sessions use a shortened session ID. Titles come from `session_index.jsonl`, with the local
+thread database as a fallback; relative `CODEX_SQLITE_HOME` paths resolve against each rollout's original working
+directory, even when its project is grouped under a different canonical repository path.
+
+Rows rank by cost descending, with unpriced sessions last. Ties use tokens descending, activity time descending,
+and source-qualified session ID ascending. The panel initially shows eight rows and can expand to the top 50.
+Dates use the dashboard's cost-bucketing time zone. Naming and ranking leave daily totals, the ledger, and existing
+per-session costs unchanged; an unpriced session remains unpriced.
+
+**Hide personal information** replaces titles with shortened session IDs and removes project names and paths,
+including from tooltips. Models, dates, tokens, costs, and ranks remain visible. Turning it off restores the names;
+this is display masking and does not remove metadata from local history or sanitize exports.
+
 ### Usage & Spend account rows
 
 Settings → Usage & Spend performs a separate fixed 30-day scan for every visible Codex account. Each request freezes

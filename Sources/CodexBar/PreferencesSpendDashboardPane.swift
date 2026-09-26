@@ -1293,7 +1293,9 @@ private struct SpendSessionRows: View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(self.visibleRows) { row in
                 let identity = row.displayIdentity(hidePersonalInfo: self.hidePersonalInfo)
-                let subtitle = row.displaySubtitle(hidePersonalInfo: self.hidePersonalInfo)
+                let subtitle = row.displaySubtitle(
+                    hidePersonalInfo: self.hidePersonalInfo,
+                    calendar: self.group.calendar)
                 if row.rank > 1 {
                     Divider()
                 }

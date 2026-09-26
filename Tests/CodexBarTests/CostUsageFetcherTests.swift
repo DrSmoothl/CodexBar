@@ -1,4 +1,5 @@
 import Foundation
+import SQLite3
 import Testing
 @testable import CodexBarCore
 
@@ -1366,6 +1367,72 @@ extension CostUsageFetcherTests {
         #expect(unnamed.title == nil)
         #expect(named.projectName == "example-project")
         #expect(named.projectPath.map { URL(fileURLWithPath: $0).lastPathComponent } == "example-project")
+    }
+
+    @Test
+    func `relative sqlite home uses each rollout directory before project canonicalization`() async throws {
+        let env = try CostUsageTestEnvironment()
+        defer { env.cleanup() }
+        let day = try env.makeLocalNoon(year: 2026, month: 4, day: 8)
+        let project = env.root.appendingPathComponent("project", isDirectory: true)
+        let git = Process()
+        git.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        git.arguments = ["init", "-q", project.path]
+        try git.run()
+        git.waitUntilExit()
+        #expect(git.terminationStatus == 0)
+
+        for sessionID in ["first", "second"] {
+            let cwd = project.appendingPathComponent(sessionID, isDirectory: true)
+            let sqliteHome = cwd.appendingPathComponent("local-state", isDirectory: true)
+            try FileManager.default.createDirectory(at: sqliteHome, withIntermediateDirectories: true)
+            var database: OpaquePointer?
+            let opened = sqlite3_open(sqliteHome.appendingPathComponent("state_5.sqlite").path, &database)
+            defer { sqlite3_close(database) }
+            #expect(opened == SQLITE_OK)
+            let sql = """
+            CREATE TABLE threads (id TEXT PRIMARY KEY, title TEXT);
+            INSERT INTO threads VALUES ('\(sessionID)', 'Title for \(sessionID)');
+            """
+            #expect(sqlite3_exec(database, sql, nil, nil, nil) == SQLITE_OK)
+            _ = try env.writeCodexSessionFile(
+                day: day,
+                filename: "\(sessionID).jsonl",
+                contents: env.jsonl([
+                    [
+                        "type": "session_meta",
+                        "timestamp": env.isoString(for: day),
+                        "payload": ["session_id": sessionID, "cwd": cwd.path],
+                    ],
+                    [
+                        "type": "event_msg",
+                        "timestamp": env.isoString(for: day.addingTimeInterval(1)),
+                        "payload": ["type": "token_count", "info": [
+                            "model": "openai/gpt-5.4",
+                            "last_token_usage": ["input_tokens": 100, "output_tokens": 10],
+                        ]],
+                    ],
+                ]))
+        }
+        let snapshot = try await CostUsageFetcher.loadTokenSnapshot(
+            provider: .codex,
+            environment: ["CODEX_SQLITE_HOME": "local-state"],
+            now: day,
+            historyDays: 1,
+            allowPricingRefresh: false,
+            includePiSessions: false,
+            scannerOptions: .init(
+                codexSessionsRoot: env.codexSessionsRoot,
+                cacheRoot: env.cacheRoot,
+                codexTraceDatabaseURL: env.root.appendingPathComponent("missing-traces.sqlite")))
+
+        #expect(snapshot.sessions.count == 2)
+        for session in snapshot.sessions {
+            #expect(session.title == "Title for \(session.sessionID)")
+            #expect(session.projectPath.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path }
+                == project.resolvingSymlinksInPath().path)
+            #expect(session.totalTokens == 110)
+        }
     }
 
     @Test

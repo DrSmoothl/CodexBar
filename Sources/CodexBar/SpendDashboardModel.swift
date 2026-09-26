@@ -323,11 +323,10 @@ struct SpendDashboardModel: Equatable, Sendable {
 
     struct SessionRow: Identifiable, Equatable, Sendable {
         let id: String
-        let rank: Int
+        var rank: Int
         let sessionID: String
         let sourceID: String
         let provider: UsageProvider
-        let providerName: String
         let title: String?
         let projectName: String?
         let projectPath: String?
@@ -1455,7 +1454,6 @@ struct SpendDashboardModel: Equatable, Sendable {
                     sessionID: session.sessionID,
                     sourceID: summary.input.id,
                     provider: summary.input.provider,
-                    providerName: summary.input.displayName,
                     title: session.title,
                     projectName: session.projectName,
                     projectPath: session.projectPath,
@@ -1467,20 +1465,9 @@ struct SpendDashboardModel: Equatable, Sendable {
         }
         .sorted(by: Self.sessionOrder)
         return rows.prefix(Self.sessionRowLimit).enumerated().map { rank, row in
-            SessionRow(
-                id: row.id,
-                rank: rank + 1,
-                sessionID: row.sessionID,
-                sourceID: row.sourceID,
-                provider: row.provider,
-                providerName: row.providerName,
-                title: row.title,
-                projectName: row.projectName,
-                projectPath: row.projectPath,
-                lastActivity: row.lastActivity,
-                totalTokens: row.totalTokens,
-                totalCost: row.totalCost,
-                modelName: row.modelName)
+            var ranked = row
+            ranked.rank = rank + 1
+            return ranked
         }
     }
 
