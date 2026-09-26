@@ -103,11 +103,11 @@ extension StatusItemController {
 
     private func removeShutdownStatusItems() {
         self.statusItem.menu = nil
-        self.removeStatusItemPreservingPlacement(self.statusItem)
+        self.removeStatusItemPreservingPlacement(self.statusItem, context: .appShutdown)
 
         for item in self.statusItems.values {
             item.menu = nil
-            self.removeStatusItemPreservingPlacement(item)
+            self.removeStatusItemPreservingPlacement(item, context: .appShutdown)
         }
         self.statusItems.removeAll(keepingCapacity: false)
         self.lastAppliedProviderIconRenderSignatures.removeAll(keepingCapacity: false)

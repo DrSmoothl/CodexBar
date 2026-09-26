@@ -75,7 +75,35 @@ struct StatusItemControllerShutdownTests {
     }
 
     @Test
-    func `status menu quit defers shutdown until menu tracking can unwind`() {
+    func `app shutdown keeps merged and provider autosave identities and saved positions`() {
+        let controller = self.makeController()
+        defer {
+            StatusItemController.menuCardRenderingEnabled = !SettingsStore.isRunningTests
+            StatusItemController.resetMenuRefreshEnabledForTesting()
+        }
+        let providerItem = controller._test_vendStatusItem(for: .claude, onCreated: { _ in })
+        let items = [controller.statusItem, providerItem]
+        let names = items.map { $0.autosaveName ?? "" }
+        let defaults = controller.settings.userDefaults
+        for (index, name) in names.enumerated() {
+            #expect(!name.isEmpty)
+            let key = MenuBarStatusItemPlacementPreflight.preferredPositionKey(autosaveName: name)
+            defaults.set(400 + index * 100, forKey: key)
+        }
+
+        controller.prepareForAppShutdown()
+        controller.prepareForAppShutdown()
+
+        for (index, item) in items.enumerated() {
+            #expect(item.autosaveName == names[index])
+            let key = MenuBarStatusItemPlacementPreflight.preferredPositionKey(autosaveName: names[index])
+            #expect(defaults.integer(forKey: key) == 400 + index * 100)
+        }
+        #expect(controller.statusItems.isEmpty)
+    }
+
+    @Test
+    func `status menu quit defers termination and leaves cleanup to the termination callback`() {
         let controller = self.makeController()
         defer {
             StatusItemController.menuCardRenderingEnabled = !SettingsStore.isRunningTests
@@ -91,6 +119,7 @@ struct StatusItemControllerShutdownTests {
             scheduledTermination = operation
         }
         controller.terminateApplicationForQuit = {
+            #expect(!controller.hasPreparedForAppShutdown)
             didTerminate = true
         }
 
@@ -103,10 +132,15 @@ struct StatusItemControllerShutdownTests {
 
         scheduledTermination?()
 
+        #expect(didTerminate)
+        #expect(!controller.hasPreparedForAppShutdown)
+
+        // AppDelegate invokes this from applicationWillTerminate, after AppKit begins termination.
+        controller.prepareForAppShutdown()
+
         #expect(controller.hasPreparedForAppShutdown)
         #expect(controller.openMenus.isEmpty)
         #expect(controller.statusItem.menu == nil)
-        #expect(didTerminate)
     }
 
     @Test

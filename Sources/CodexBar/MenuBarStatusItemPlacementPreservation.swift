@@ -9,6 +9,11 @@ import AppKit
 /// untouched and are a no-op here.
 @MainActor
 enum MenuBarStatusItemPlacementPreservation {
+    enum RemovalContext {
+        case whileRunning
+        case appShutdown
+    }
+
     @discardableResult
     static func preservingPreferredPosition<T>(
         autosaveName: String,
@@ -25,10 +30,19 @@ enum MenuBarStatusItemPlacementPreservation {
         return result
     }
 
-    static func removeStatusItem(_ item: NSStatusItem, from statusBar: NSStatusBar, defaults: UserDefaults) {
+    static func removeStatusItem(
+        _ item: NSStatusItem,
+        from statusBar: NSStatusBar,
+        defaults: UserDefaults,
+        context: RemovalContext = .whileRunning)
+    {
         self.preservingPreferredPosition(autosaveName: item.autosaveName ?? "", defaults: defaults) {
-            // Retire the autosave identity before AppKit's later cleanup can clear the stable key again.
-            item.autosaveName = nil
+            if context == .whileRunning {
+                // Retire the identity before AppKit's later cleanup can clear the stable key again.
+                item.autosaveName = nil
+            }
+            // During applicationWillTerminate, keep the host identity stable. Renaming it just before
+            // exit can race ControlCenter's teardown and leave an empty Item-0 slot behind.
             statusBar.removeStatusItem(item)
         }
     }

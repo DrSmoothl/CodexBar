@@ -48,11 +48,15 @@ extension StatusItemController {
 
     /// Removes a status item while keeping its saved menu bar position (see
     /// `MenuBarStatusItemPlacementPreservation`).
-    func removeStatusItemPreservingPlacement(_ item: NSStatusItem) {
+    func removeStatusItemPreservingPlacement(
+        _ item: NSStatusItem,
+        context: MenuBarStatusItemPlacementPreservation.RemovalContext = .whileRunning)
+    {
         MenuBarStatusItemPlacementPreservation.removeStatusItem(
             item,
             from: self.statusBar,
-            defaults: self.settings.userDefaults)
+            defaults: self.settings.userDefaults,
+            context: context)
     }
 
     /// Shows or hides a status item while keeping its saved menu bar position.
