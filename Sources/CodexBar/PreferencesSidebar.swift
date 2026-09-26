@@ -229,14 +229,19 @@ private struct SettingsSidebarBrandIcon: View {
     }
 }
 
-private struct SettingsSidebarStatusDot: View {
+struct SettingsSidebarStatusDot: View {
     let indicator: ProviderStatusIndicator
 
     var body: some View {
         Circle()
             .fill(self.statusColor)
             .frame(width: 6, height: 6)
-            .accessibilityHidden(true)
+            .help(Self.statusDescription(for: self.indicator))
+            .accessibilityLabel(Self.statusDescription(for: self.indicator))
+    }
+
+    nonisolated static func statusDescription(for indicator: ProviderStatusIndicator) -> String {
+        L("Provider service status: %@", indicator.label)
     }
 
     private var statusColor: Color {
