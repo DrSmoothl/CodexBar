@@ -11,10 +11,6 @@ extension ProviderFetchContext {
 public enum CodexProviderDescriptor {
     public static let descriptor: ProviderDescriptor = Self.makeDescriptor()
 
-    /// PAT lives in Codex CLI `auth.json`, not ProviderConfig.apiKey.
-    private static let credentials = ProviderCredentialAdapter(
-        requiresAPIKeyForAPISource: false)
-
     /// Preserve the legacy prompt behavior before probing Chromium variants that may trigger Safe Storage prompts.
     private static var browserCookieOrder: BrowserCookieImportOrder? {
         #if os(macOS)
@@ -31,7 +27,8 @@ public enum CodexProviderDescriptor {
             menuBarMetrics: ProviderMenuBarMetricCapabilities(
                 supported: [.automatic, .primary, .secondary, .primaryAndSecondary, .extraUsage]),
             settingsSection: .init(CodexProviderSettingsKey.self),
-            credentials: self.credentials,
+            // PAT lives in Codex CLI `auth.json`, not ProviderConfig.apiKey.
+            credentials: ProviderCredentialAdapter(requiresAPIKeyForAPISource: false),
             metadata: ProviderMetadata(
                 id: .codex,
                 displayName: "Codex",
