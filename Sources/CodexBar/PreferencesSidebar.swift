@@ -168,7 +168,7 @@ private struct SettingsSidebarAboutRow: View {
 }
 
 @MainActor
-private struct SettingsSidebarProviderRow: View {
+struct SettingsSidebarProviderRow: View {
     let provider: UsageProvider
     @Bindable var store: UsageStore
     @Binding var isEnabled: Bool
@@ -201,8 +201,22 @@ private struct SettingsSidebarProviderRow: View {
     }
 
     private var accessibilityLabel: String {
-        let name = self.store.metadata(for: self.provider).displayName
-        return self.isEnabled ? name : "\(name) — \(L("Disabled"))"
+        Self.accessibilityLabel(
+            name: self.store.metadata(for: self.provider).displayName,
+            isEnabled: self.isEnabled,
+            statusChecksEnabled: self.store.statusChecksEnabled,
+            indicator: self.store.statusIndicator(for: self.provider))
+    }
+
+    nonisolated static func accessibilityLabel(
+        name: String,
+        isEnabled: Bool,
+        statusChecksEnabled: Bool,
+        indicator: ProviderStatusIndicator) -> String
+    {
+        guard isEnabled else { return "\(name) — \(L("Disabled"))" }
+        guard statusChecksEnabled else { return name }
+        return "\(name) — \(SettingsSidebarStatusDot.statusDescription(for: indicator))"
     }
 }
 
